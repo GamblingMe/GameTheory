@@ -1,14 +1,14 @@
 <template>
-  <el-container>
+  <el-container id="container">
     <el-col>
-      <el-row
-        ><h1>{{ title }}</h1></el-row
-      >
+      <el-row>
+        <h1 id="title">{{ title }}</h1>
+      </el-row>
       <el-row v-if="status == 'finished'">
-        <p style="color: gray">游戏已结束</p>
+        <p style="color: gray" id="status">游戏已结束</p>
       </el-row>
       <el-row v-if="status == 'waiting'">
-        <p style="color: gray">游戏尚未开始</p>
+        <p style="color: gray" id="status">游戏尚未开始</p>
       </el-row>
       <el-row v-if="status == 'started' || status == 'waiting'">
         <div class="demo-progress">
@@ -26,7 +26,7 @@
       </el-row>
       <div style="display: inline-block">
         <el-row v-for="i in question" :key="i" id="titlediv">
-          <p>
+          <p id="question">
             {{ i }}
           </p>
         </el-row>
@@ -53,9 +53,9 @@
         </el-button>
       </el-row>
       <el-row v-if="status == 'finished'">
-        <h3>结果</h3>
+        <h3 id="ans">结果</h3>
       </el-row>
-      <el-row v-if="status == 'finished'">
+      <el-row v-if="status == 'finished'" id="ansPer">
         <div v-for="item in options" :key="item">
           <el-col style="margin-right: 10px">
             <div>
@@ -69,9 +69,11 @@
               :percentage="
                 participants.length == 0
                   ? 0
-                  : (allocations[options.indexOf(item)].length /
-                      participants.length) *
-                    100
+                  : Math.floor(
+                      (allocations[options.indexOf(item)].length /
+                        participants.length) *
+                        1000
+                    ) / 10
               "
               id="finishedAns"
             >
@@ -80,9 +82,11 @@
                 {{
                   participants.length == 0
                     ? 0
-                    : (allocations[options.indexOf(item)].length /
-                        participants.length) *
-                      100
+                    : Math.floor(
+                        (allocations[options.indexOf(item)].length /
+                          participants.length) *
+                          1000
+                      ) / 10
                 }}%
               </p>
             </el-progress>
@@ -92,7 +96,7 @@
     </el-col>
     <el-footer>
       <el-link href="https://github.com/GamblingMe/GamblingNow/" type="primary"
-        >Power by GamblingNow</el-link
+        >Powered by GameTheory</el-link
       >
     </el-footer>
   </el-container>
@@ -286,6 +290,7 @@ export default {
 }
 #titlediv {
   place-content: unset;
+  text-align: left;
 }
 .el-button {
   margin-top: 20px;
@@ -306,9 +311,27 @@ export default {
 }
 #finishedAns {
   margin-bottom: 15px;
-  width: 350px;
+  width: 250px;
 }
 .el-footer {
   margin-top: 50px;
+}
+#title {
+  margin: 0px;
+}
+#status {
+  margin: 0px;
+}
+#question {
+  margin: 0px;
+}
+#ans {
+  margin-top: 80px;
+}
+#container {
+  padding: 30px;
+}
+#ansPer {
+  max-width: 400px;
 }
 </style>
