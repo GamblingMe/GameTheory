@@ -130,7 +130,11 @@ def score(username: str):
 
 @app.get("/games_titles")
 def games_titles():
-    return {"status": "ok", "games": [game.title for game in games.values()]}
+    gms = []
+    for game in games.values():
+        if game.gid != id_now:
+            gms.append(game.title)
+    return {"status": "ok", "games": gms}
 
 
 @app.post("/new_game")
