@@ -1,4 +1,7 @@
 # coding:utf-8
+from audioop import add
+import random
+from glob import glob
 from time import time
 import json
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -16,10 +19,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"])
 
+id_now = -1
+
+
+def generate_id():
+    global id_now
+    id_now += 1
+    return id_now
+
+
+default_evaluator = '''adds = [1] * len(result)'''
+
 
 class Game:
     def __init__(self, title, question, selections: list[str], start_timestamp_msec=0,
-                 duration_msec=0, status="finished"):
+                 duration_msec=0, status="finished", evaluator=default_evaluator):
+        self.gid = generate_id()
         self.title = title
         self.question = question
         self.selections = selections
@@ -28,15 +43,17 @@ class Game:
             self.allocations.append(set())
         # status: waiting, started, finished
         self.status = status
+        self.evaluator = default_evaluator if len(evaluator) == 0 else evaluator
         self.start_timestamp_msec = start_timestamp_msec
         self.duration_msec = duration_msec
         self.participants = set()
 
 
-game = Game("测试用例", "门票先花掉2元：\n(1)如果过半人选A而你也选A,那你将得到1元。\n(2)如果过半人选A而你选B,那你将得到6元。\n(3)如果过半人选B,则选B的扣掉2元，选A的得到4元。",
-            ["A", "B"], 1650816000000, 69400000, "started")
+games = {}
 
 chats = []
+
+accounts = {}
 
 
 class SubmitItem(BaseModel):
@@ -51,35 +68,105 @@ class GameHttp(BaseModel):
     selections: list[str]
     start_timestamp_msec: int
     duration_msec: int
+    evaluator: str
 
 
-def update_game_status(game):
+def update_score(game):
+    evaluator = game.evaluator
+    alloc = [0] * len(game.selections)
+    for i in range(len(alloc)):
+        alloc[i] = len(game.allocations[i])
+    local = {}
+    exec(evaluator, {'result': alloc}, local)
+    eval_res = local['adds']
+    for i in range(len(game.allocations)):
+        for uid in game.allocations[i]:
+            accounts[uid] += eval_res[i]
+
+
+def update_game_status(gid: int):
+    global games
+    game = games[gid]
     if time() * 1000 - game.start_timestamp_msec > game.duration_msec:
+        if game.status != "finished":
+            update_score(game)
         game.status = "finished"
     elif game.status == "waiting":
         game.status = "started"
 
 
+animals = "虎、狼、鼠、鹿、貂、猴、树懒、斑马、狗、狐、豹子、麝牛、狮子、疣猪、考拉、犀牛、猞猁、穿山甲、长颈鹿、熊猫、食蚁兽、猩猩、海牛、灵猫、海豚、海象、鸭嘴兽、刺猬、北极狐、无尾熊、北极熊、袋鼠、犰狳、河马、海豹、鲸鱼、鼬".split(
+    '、')
+
+
+def randname():
+    return random.choice(animals) + "#" + str(random.randint(1000, 10000))
+
+
+@app.get("/rand_username")
+def rand_username():
+    i = 0
+    while i < 20:
+        name = randname()
+        if name not in accounts:
+            accounts[name] = 10
+            return {"username": name, "status": "ok"}
+        i += 1
+    return {"status": "error", "message": "too many duplicates, try again later"}
+
+
+@app.get("/rank")
+def rank():
+    return {"status": "ok", "rank": accounts}
+
+
+@app.get("/score/{username}")
+def score(username: str):
+    if username in accounts:
+        return {"status": "ok", "score": accounts[username]}
+    else:
+        return {"status": "error", "message": "user not found"}
+
+
+@app.get("/games_titles")
+def games_titles():
+    return {"status": "ok", "games": [game.title for game in games.values()]}
+
+
 @app.post("/new_game")
 async def new_game(new_game: GameHttp):
-    global game, chats
+    global games, chats
+    if id_now != -1 and games[id_now].status != "finished":
+        return {"status": "error", "message": "game already exists"}
     game = Game(new_game.title, new_game.question, new_game.selections, new_game.start_timestamp_msec,
-                new_game.duration_msec, "started")
-    update_game_status(game)
+                new_game.duration_msec, "started", new_game.evaluator)
+    games[game.gid] = game
+    update_game_status(game.gid)
     chats = []
     return game
 
 
+@app.get("/game/{gid}")
+def get_game(gid: int):
+    global games
+    if gid not in games:
+        return {"status": "error", "message": "game not found"}
+    game = games[gid]
+    return {"status": "ok", "game": game}
+
+
 @app.post("/submits")
 async def submit(submit: SubmitItem):
-    update_game_status(game)
+    global games
+    update_game_status(id_now)
     print(f"{submit.user_id} submitted {submit.selection} at {submit.timestamp}")
+    game = games[id_now]
     if game.status != "started":
         return {"status": f"invalid operation, game is {game.status}"}
     dup_flag = False
     for allocation in game.allocations:
         if submit.user_id in allocation:
-            dup_flag = True
+            allocation.remove(submit.user_id)
     if dup_flag:
         return {"status": "duplicate"}
     game.allocations[submit.selection].add(submit.user_id)
@@ -89,68 +176,7 @@ async def submit(submit: SubmitItem):
 
 @app.get("/submits")
 async def get_submits() -> Game:
-    update_game_status(game)
+    global games
+    game = games[id_now]
+    update_game_status(id_now)
     return game
-
-
-class ConnectionManager:
-    def __init__(self):
-        # 存放激活的ws连接对象
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, ws: WebSocket):
-        # 等待连接
-        await ws.accept()
-        # 存储ws连接对象
-        self.active_connections.append(ws)
-
-    def disconnect(self, ws: WebSocket):
-        # 关闭时 移除ws对象
-        self.active_connections.remove(ws)
-
-    @staticmethod
-    async def send_personal_message(message: str, ws: WebSocket):
-        # 发送个人消息
-        await ws.send_text(message)
-
-    async def broadcast(self, message: str):
-        # 广播消息
-        for connection in self.active_connections:
-            await connection.send_text(message)
-
-
-manager = ConnectionManager()
-
-
-@app.websocket("/ws/{user}")
-async def websocket_endpoint(websocket: WebSocket, user: str):
-
-    await manager.connect(websocket)
-
-    await manager.broadcast(f"用户{user}进入聊天室")
-
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await manager.send_personal_message(f"你说了: {data}", websocket)
-            await manager.broadcast(f"用户:{user} 说: {data}")
-
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        await manager.broadcast(f"用户-{user}-离开")
-
-
-@app.websocket("/chat/{user}")
-async def chat(websocket: WebSocket, user: str):
-    await manager.connect(websocket)
-    await manager.send_personal_message(json.dumps({"type": "init", "chats": chats}), websocket)
-    await manager.broadcast(json.dumps({"type": "enter", "user": user, "message": f"用户{user}进入聊天室"}))
-    try:
-        while True:
-            data = await websocket.receive_text()
-            chats.append({"user": user, "message": data})
-            await manager.broadcast(json.dumps({"type": "message", "user": user, "message": data}))
-
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        await manager.broadcast(json.dumps({"type": "exit", "user": user, "message": f"用户{user}离开聊天室"}))
