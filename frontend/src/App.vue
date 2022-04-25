@@ -10,7 +10,7 @@
       <el-row v-if="status == 'waiting'">
         <p style="color: gray">游戏尚未开始</p>
       </el-row>
-      <el-row v-if="status == 'started'">
+      <el-row v-if="status == 'started' || status == 'waiting'">
         <div class="demo-progress">
           <el-progress
             type="dashboard"
@@ -67,16 +67,34 @@
               :text-inside="true"
               :stroke-width="17"
               :percentage="
-                (allocations[options.indexOf(item)].length /
-                  participants.length) *
-                100
+                participants.length == 0
+                  ? 0
+                  : (allocations[options.indexOf(item)].length /
+                      participants.length) *
+                    100
               "
               id="finishedAns"
-            />
+            >
+              <p style="margin: 0px">
+                {{ allocations[options.indexOf(item)].length }}人，
+                {{
+                  participants.length == 0
+                    ? 0
+                    : (allocations[options.indexOf(item)].length /
+                        participants.length) *
+                      100
+                }}%
+              </p>
+            </el-progress>
           </el-col>
         </div>
       </el-row>
     </el-col>
+    <el-footer>
+      <el-link href="https://github.com/GamblingMe/GamblingNow/" type="primary"
+        >Power by GamblingNow</el-link
+      >
+    </el-footer>
   </el-container>
 </template>
 
@@ -116,25 +134,42 @@ export default {
       let now = Date.now();
       if (now > this.endTime && this.status == "started") {
         location.reload();
+        return;
       }
       if (now > this.startTime && this.status == "waiting") {
         location.reload();
+        return;
       }
-      console.log(this.startTime, this.endTime, now);
-      let hour = Math.floor((this.endTime - now) / (1000 * 60 * 60));
-      let minute = Math.floor((this.endTime - now) / (1000 * 60)) % 60;
-      let second = Math.floor((this.endTime - now) / 1000) % 60;
-      if (minute < 10) {
-        minute = "0" + minute;
+      if (this.status == "started") {
+        console.log(this.startTime, this.endTime, now);
+        let hour = Math.floor((this.endTime - now) / (1000 * 60 * 60));
+        let minute = Math.floor((this.endTime - now) / (1000 * 60)) % 60;
+        let second = Math.floor((this.endTime - now) / 1000) % 60;
+        if (minute < 10) {
+          minute = "0" + minute;
+        }
+        if (second < 10) {
+          second = "0" + second;
+        }
+        this.countDown = `${hour}:${minute}:${second}`;
+        this.endPercent =
+          Math.floor(
+            ((now - this.startTime) / (this.endTime - this.startTime)) * 1000
+          ) / 10;
+      } else if (this.status == "waiting") {
+        let hour = Math.floor((this.startTime - now) / (1000 * 60 * 60));
+        let minute = Math.floor((this.startTime - now) / (1000 * 60)) % 60;
+        let second = Math.floor((this.startTime - now) / 1000) % 60;
+        if (minute < 10) {
+          minute = "0" + minute;
+        }
+        if (second < 10) {
+          second = "0" + second;
+        }
+        this.countDown = `${hour}:${minute}:${second}`;
+        this.endPercent = 0;
       }
-      if (second < 10) {
-        second = "0" + second;
-      }
-      this.countDown = `${hour}:${minute}:${second}`;
-      this.endPercent =
-        Math.floor(
-          ((now - this.startTime) / (this.endTime - this.startTime)) * 1000
-        ) / 10;
+
       setTimeout(this.updateCountDown, 1000);
     },
     submitAns() {
@@ -175,6 +210,9 @@ export default {
             this.status = res.data.status;
             this.allocations = res.data.allocations;
             this.participants = res.data.participants;
+            if (Date.now() < this.startTime) {
+              this.status = "waiting";
+            }
             setTimeout(() => {
               this.loading.close();
             }, 500);
@@ -269,5 +307,8 @@ export default {
 #finishedAns {
   margin-bottom: 15px;
   width: 350px;
+}
+.el-footer {
+  margin-top: 50px;
 }
 </style>
