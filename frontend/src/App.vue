@@ -146,7 +146,7 @@ export default {
       };
       console.log(data);
       axios
-        .post("http://game.byr.cool:8000/submits", data)
+        .post("http://81.70.254.227:8000/submits", data)
         .then((res) => {
           if (res.data.status === "ok") {
             ElMessage.success("提交成功");
@@ -162,7 +162,7 @@ export default {
     },
     async getTitle() {
       axios
-        .get("http://game.byr.cool:8000/submits")
+        .get("http://81.70.254.227:8000/submits")
         .then((res) => {
           try {
             this.title = res.data.title;
