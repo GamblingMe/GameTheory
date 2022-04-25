@@ -175,6 +175,8 @@ async def submit(submit: SubmitItem):
         return {"status": "duplicate"}
     game.allocations[submit.selection].add(submit.user_id)
     game.participants.add(submit.user_id)
+    if submit.user_id not in accounts:
+        accounts[submit.user_id] = 10
     return {"status": "ok"}
 
 
