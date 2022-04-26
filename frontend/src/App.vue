@@ -16,7 +16,7 @@
     </el-tab-pane>
   </el-tabs>
   <el-footer>
-    <div>V0.2.2</div>
+    <div>V0.2.3</div>
     <el-link href="https://github.com/GamblingMe/GamblingNow/" type="primary"
       >Powered by GameTheory</el-link
     >
@@ -54,5 +54,8 @@ export default {
 }
 .el-footer {
   margin-top: 50px;
+}
+.el-message-box {
+  max-width: 90%;
 }
 </style>

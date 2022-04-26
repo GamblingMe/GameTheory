@@ -130,6 +130,7 @@ export default {
       status: "",
       allocations: [],
       participants: [],
+      user_id: "",
     };
   },
   created() {
