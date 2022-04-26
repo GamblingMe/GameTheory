@@ -16,6 +16,7 @@
     </el-tab-pane>
   </el-tabs>
   <el-footer>
+    <div>V0.2.2</div>
     <el-link href="https://github.com/GamblingMe/GamblingNow/" type="primary"
       >Powered by GameTheory</el-link
     >

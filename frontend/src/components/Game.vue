@@ -122,6 +122,11 @@ export default {
         text: "加载题目中...",
         background: "rgba(255, 255, 255, 1)",
       }),
+      loading2: ElLoading.service({
+        lock: true,
+        text: "获取昵称中...",
+        background: "rgba(255, 255, 255, 1)",
+      }),
       status: "",
       allocations: [],
       participants: [],
@@ -238,6 +243,9 @@ export default {
             if (res.data.status == "ok") {
               localStorage.setItem("user_id", res.data.username);
               this.user_id = res.data.username;
+              setTimeout(() => {
+                this.loading2.close();
+              }, 500);
             } else {
               console.log(res.data.message);
               ElMessage.error("获取用户ID失败，重试");
