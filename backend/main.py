@@ -130,7 +130,11 @@ def score(username: str):
 
 @app.get("/games_titles")
 def games_titles():
-    return {"status": "ok", "games": [game.title for game in games.values()]}
+    gms = []
+    for game in games.values():
+        if game.gid != id_now:
+            gms.append(game.title)
+    return {"status": "ok", "games": gms}
 
 
 @app.post("/new_game")
@@ -171,6 +175,8 @@ async def submit(submit: SubmitItem):
         return {"status": "duplicate"}
     game.allocations[submit.selection].add(submit.user_id)
     game.participants.add(submit.user_id)
+    if submit.user_id not in accounts:
+        accounts[submit.user_id] = 10
     return {"status": "ok"}
 
 
