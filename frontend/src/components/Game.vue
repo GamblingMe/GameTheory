@@ -1,11 +1,12 @@
 <template>
   <el-container id="container">
     <el-col>
-      <el-row>
+      <el-row style="margin-bottom: 0">
         你是 {{ user_id }}，<el-link type="primary" @click="remake"
           >Remake</el-link
         >
       </el-row>
+      <el-row> 积分为：{{ user_score }} </el-row>
       <el-row>
         <h1 id="title">{{ title }}</h1>
       </el-row>
@@ -60,10 +61,18 @@
       <el-row v-if="status == 'finished'">
         <h3 id="ans">结果</h3>
       </el-row>
+      <el-row v-if="status == 'finished' && gainScore != null && selected">
+        在这场游戏中，您选择了 {{ selected }}，{{ gainScore >= 0 ? "获得" : "失去" }}了
+        {{ gainScore }} 分
+      </el-row>
       <el-row v-if="status == 'finished'" id="ansPer">
         <div v-for="item in options" :key="item">
           <el-col style="margin-right: 10px">
-            <div>
+            <div
+              :style="
+                item == selected ? { color: 'var(--el-color-primary)' } : ''
+              "
+            >
               {{ item }}
             </div>
           </el-col>
@@ -131,12 +140,14 @@ export default {
       allocations: [],
       participants: [],
       user_id: "",
+      user_score: 10,
+      selected: null,
+      gainScore: null,
     };
   },
   created() {
     this.setUserID();
     this.updateCountDown();
-    this.getTitle();
   },
   methods: {
     updateCountDown() {
@@ -188,7 +199,7 @@ export default {
         game_id: this.game_id,
       };
       axios
-        .post("http://81.70.254.227:8000/submits", data)
+        .post("http://10.28.204.120:8000/submits", data)
         .then((res) => {
           if (res.data.status === "ok") {
             ElMessage.success("提交成功");
@@ -204,20 +215,31 @@ export default {
     },
     async getTitle() {
       axios
-        .get("http://81.70.254.227:8000/submits")
+        .get("http://10.28.204.120:8000/submits", {
+          params: {
+            username: this.user_id,
+          },
+        })
         .then((res) => {
           try {
-            this.title = res.data.title;
-            this.question = res.data.question.split("\n");
-            this.options = res.data.selections;
-            this.startTime = res.data.start_timestamp_msec;
+            this.title = res.data.game.title;
+            this.question = res.data.game.question.split("\n");
+            this.options = res.data.game.selections;
+            this.startTime = res.data.game.start_timestamp_msec;
             this.endTime =
-              res.data.start_timestamp_msec + res.data.duration_msec;
+              res.data.game.start_timestamp_msec + res.data.game.duration_msec;
             this.updateCountDown();
-            this.status = res.data.status;
-            this.allocations = res.data.allocations;
-            this.participants = res.data.participants;
-            this.game_id = res.data.gid;
+            this.status = res.data.game.status;
+            this.allocations = res.data.game.allocations;
+            this.participants = res.data.game.participants;
+            this.game_id = res.data.game.gid;
+            this.user_score = res.data.user_score;
+            this.selected =
+              res.data.user_selection == -1
+                ? null
+                : this.options[res.data.user_selection];
+            this.answer = this.selected;
+            this.gainScore = res.data.result ? res.data.result : null;
             if (Date.now() < this.startTime) {
               this.status = "waiting";
             }
@@ -237,13 +259,15 @@ export default {
     setUserID() {
       if (localStorage.getItem("user_id")) {
         this.user_id = localStorage.getItem("user_id");
+        this.getTitle();
       } else {
         axios
-          .get("http://81.70.254.227:8000/rand_username")
+          .get("http://10.28.204.120:8000/rand_username")
           .then((res) => {
             if (res.data.status == "ok") {
               localStorage.setItem("user_id", res.data.username);
               this.user_id = res.data.username;
+              this.getTitle();
               setTimeout(() => {
                 this.loading2.close();
               }, 500);
@@ -280,6 +304,15 @@ export default {
             message: "恭喜你，请不要放弃自己。",
           });
         });
+    },
+    startLoading() {
+      this.loading = ElLoading.service({
+        lock: true,
+        text: "加载中...",
+        background: "rgba(255, 255, 255, 1)",
+      });
+      this.selected = null;
+      this.hasData = false;
     },
   },
 };
