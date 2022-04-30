@@ -1,13 +1,13 @@
 # coding:utf-8
 
-from imp import reload
+import uvicorn
 import json
 import random
 from time import time
 from fastapi import FastAPI
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
-import uvicorn
+import pickle
 import os
 
 app = FastAPI()
@@ -80,12 +80,15 @@ accounts = {}
 
 @app.on_event("startup")
 async def startup():
-    if os.path.exists("data.json"):
+    global games, accounts, id_now
+    if os.path.exists("save.data"):
         print("Loading games from file...")
-        global games, accounts
-        data = json.load(open("games.data.json", 'r'))
+        f = open("save.data", "rb")
+        data = pickle.load(f)
+        print(data)
         games = data["games"]
         accounts = data["accounts"]
+        id_now = data["id_now"]
     else:
         print("Creating new games...")
 
@@ -93,8 +96,10 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     print("Saving games to file...")
-    data = {"games": games, "accounts": accounts}
-    json.dump(data, open("games.data.json", 'w'))
+    data = {"games": games, "accounts": accounts, "id_now": id_now}
+    f = open("save.data", "wb")
+    pickle.dump(data, f)
+    f.close()
 
 
 class SubmitItem(BaseModel):
@@ -253,3 +258,7 @@ def get_submits(username: str = "") -> Game:
     gu = query_selection_and_result(id_now, username)
     return {"status": "ok", "game": game, "user_score": -1 if username not in accounts else accounts[username],
             "user_selection": gu["selection"], "result": gu["result"]}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0")
