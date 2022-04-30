@@ -1,11 +1,21 @@
 <template>
   <el-container id="container">
-    <el-table :data="rankList" stripe style="width: 100%">
-      <el-table-column prop="rank" label="排名" width="120" />
-      <el-table-column prop="name" label="昵称" width="120" />
+    <el-table
+      :data="rankList"
+      style="width: 100%"
+      :row-class-name="tableRowClassName"
+    >
+      <el-table-column prop="rank" label="排名" width="80" />
+      <el-table-column prop="name" label="昵称" width="160" />
       <el-table-column prop="point" label="积分" width="120" />
     </el-table>
   </el-container>
+  <el-button type="primary" class="fixed-button" @click="goToMe">
+    <el-icon class="el-icon--left">
+      <Sort />
+    </el-icon>
+    我的
+  </el-button>
 </template>
 
 <script>
@@ -32,23 +42,45 @@ export default {
   methods: {
     getRankList() {
       axios
-        .get("http://81.70.254.227:8000/rank")
+        .get("http://10.28.204.120:8000/rank")
         .then((res) => {
           if (res.data.status == "ok") {
             let rank = res.data.rank;
+            const maxRank = 3;
+            const myName = localStorage.getItem("user_id");
+            let tmpRankList = [];
             this.rankList = [];
             console.log(rank);
             for (let i in rank) {
-              this.rankList.push({
+              tmpRankList.push({
                 name: i,
                 point: rank[i],
               });
             }
-            this.rankList.sort((a, b) => {
+            tmpRankList.sort((a, b) => {
               return b.point - a.point;
             });
-            for (let i in this.rankList) {
-              this.rankList[i].rank = parseInt(i) + 1;
+            let flag = false;
+            for (let i in tmpRankList) {
+              if (tmpRankList[i].name == myName) {
+                flag = i;
+              }
+              tmpRankList[i].rank = parseInt(i) + 1;
+              if (parseInt(i) + 1 <= maxRank) {
+                this.rankList.push(tmpRankList[i]);
+              }
+            }
+            if (flag >= maxRank) {
+              this.rankList.push({
+                name: "...",
+                point: "...",
+                rank: "...",
+              });
+              this.rankList.push({
+                name: myName,
+                point: rank[myName],
+                rank: maxRank + "+",
+              });
             }
             setTimeout(() => {
               this.loading.close();
@@ -67,6 +99,24 @@ export default {
             this.loading.close();
           }, 500);
         });
+    },
+    tableRowClassName({ row }) {
+      if (localStorage.getItem("user_id") == row.name) {
+        return "my-row";
+      }
+    },
+    goToMe() {
+      // smooth
+      document.getElementsByClassName("my-row")[0].scrollIntoView({
+        behavior: "smooth",
+      });
+    },
+    startLoading() {
+      this.loading = ElLoading.service({
+        lock: true,
+        text: "加载排行榜中...",
+        background: "rgba(255, 255, 255, 1)",
+      });
     },
   },
 };
@@ -105,6 +155,7 @@ export default {
 }
 .el-button {
   margin-top: 20px;
+  padding: 8px 8px;
 }
 .demo-progress .el-progress--line {
   margin-bottom: 15px;
@@ -141,5 +192,17 @@ export default {
 }
 #ansPer {
   max-width: 400px;
+}
+.fixed-button {
+  position: fixed;
+  bottom: 20px;
+  z-index: 999;
+  right: 20px;
+}
+</style>
+
+<style>
+.el-table__row.my-row {
+  background-color: var(--el-color-success-light-9);
 }
 </style>

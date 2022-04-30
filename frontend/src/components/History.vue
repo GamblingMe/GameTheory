@@ -22,10 +22,19 @@
       <el-row v-if="hasData">
         <h3 id="ans">结果</h3>
       </el-row>
+      <el-row v-if="hasData && gainScore != null && selected2">
+        在这场游戏中，您选择了 {{ selected2 }}，{{
+          gainScore >= 0 ? "获得" : "失去"
+        }}了 {{ gainScore }} 分
+      </el-row>
       <el-row v-if="hasData" id="ansPer">
         <div v-for="item in options" :key="item">
           <el-col style="margin-right: 10px">
-            <div>
+            <div
+              :style="
+                item == selected2 ? { color: 'var(--el-color-primary)' } : ''
+              "
+            >
               {{ item }}
             </div>
           </el-col>
@@ -100,6 +109,8 @@ export default {
         text: "加载历史游戏列表中...",
         background: "rgba(255, 255, 255, 1)",
       }),
+      selected2: null,
+      gainScore: null,
     };
   },
   created() {
@@ -108,7 +119,7 @@ export default {
   methods: {
     getGameHistory() {
       axios
-        .get("http://81.70.254.227:8000/games_titles")
+        .get("http://10.28.204.120:8000/games_titles")
         .then((res) => {
           if (res.data.status == "ok") {
             const games = res.data.games;
@@ -138,6 +149,13 @@ export default {
           }, 500);
         });
     },
+    startLoading() {
+      this.loading = ElLoading.service({
+        lock: true,
+        text: "加载历史游戏列表中...",
+        background: "rgba(255, 255, 255, 1)",
+      });
+    },
   },
   watch: {
     selected(val) {
@@ -147,9 +165,12 @@ export default {
         background: "rgba(255, 255, 255, 1)",
       });
       console.log(val);
+      let user_id = localStorage.getItem("user_id").replaceAll("#", "%23");
+
+      console.log(user_id);
       if (val != null) {
         axios
-          .get("http://81.70.254.227:8000/game/" + val)
+          .get("http://10.28.204.120:8000/game/" + val + "/user/" + user_id)
           .then((res) => {
             if (res.data.status == "ok") {
               this.title = res.data.game.gid + ". " + res.data.game.title;
@@ -162,6 +183,11 @@ export default {
               this.allocations = res.data.game.allocations;
               this.participants = res.data.game.participants;
               this.hasData = true;
+              this.selected2 =
+                res.data.user_selection == -1
+                  ? null
+                  : this.options[res.data.user_selection];
+              this.gainScore = res.data.result ? res.data.result : null;
               setTimeout(() => {
                 this.loading.close();
               }, 500);

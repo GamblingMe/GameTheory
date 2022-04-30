@@ -39,6 +39,22 @@ export default {
       activeName: "first",
     };
   },
+  methods: {
+    handleClick(tab) {
+      console.log(tab);
+      if (tab.paneName == "first") {
+        Game.methods.startLoading();
+        Game.methods.setUserID();
+        Game.methods.updateCountDown();
+      } else if (tab.paneName == "second") {
+        History.methods.startLoading();
+        History.methods.getGameHistory();
+      } else if (tab.paneName == "third") {
+        Rank.methods.startLoading();
+        Rank.methods.getRankList();
+      }
+    },
+  },
 };
 </script>
 
