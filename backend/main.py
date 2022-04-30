@@ -1,12 +1,14 @@
 # coding:utf-8
-from audioop import add
-import random
-from glob import glob
-from time import time
+
+from imp import reload
 import json
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import random
+from time import time
+from fastapi import FastAPI
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
+import uvicorn
+import os
 
 app = FastAPI()
 origins = ["*"]
@@ -39,8 +41,10 @@ class Game:
         self.question = question
         self.selections = selections
         self.allocations = []
+        self.result = []
         for i in range(len(self.selections)):
             self.allocations.append(set())
+            self.result.append(0.0)
         # status: waiting, started, finished
         self.status = status
         self.evaluator = default_evaluator if len(evaluator) == 0 else evaluator
@@ -49,11 +53,48 @@ class Game:
         self.participants = set()
 
 
+# class GameResp(BaseModel):
+#     gid: int
+#     title: str
+#     question: str
+#     selections: str
+#     allocations: list[set]
+#     result: list[float]
+#     status: str
+#     start_timestamp_msec: int
+#     duration_msec: int
+#     participants: set[str]
+
+
+# def game_to_resp(game: Game) -> GameResp:
+#     return GameResp(gid=game.gid, title=game.title, question=game.question, selections=game.selections,
+#                     allocations=game.allocations, result=game.result, status=game.status,
+#                     start_timestamp_msec=game.start_timestamp_msec,
+#                     duration_msec=game.duration_msec, participants=game.participants)
+
+
 games = {}
 
-chats = []
-
 accounts = {}
+
+
+@app.on_event("startup")
+async def startup():
+    if os.path.exists("data.json"):
+        print("Loading games from file...")
+        global games, accounts
+        data = json.load(open("games.data.json", 'r'))
+        games = data["games"]
+        accounts = data["accounts"]
+    else:
+        print("Creating new games...")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    print("Saving games to file...")
+    data = {"games": games, "accounts": accounts}
+    json.dump(data, open("games.data.json", 'w'))
 
 
 class SubmitItem(BaseModel):
@@ -79,6 +120,7 @@ def update_score(game):
     local = {}
     exec(evaluator, {'result': alloc}, local)
     eval_res = local['adds']
+    game.result = eval_res
     for i in range(len(game.allocations)):
         for uid in game.allocations[i]:
             accounts[uid] += eval_res[i]
@@ -120,26 +162,20 @@ def rank():
     return {"status": "ok", "rank": accounts}
 
 
-@app.get("/score/{username}")
-def score(username: str):
-    if username in accounts:
-        return {"status": "ok", "score": accounts[username]}
-    else:
-        return {"status": "error", "message": "user not found"}
-
-
 @app.get("/games_titles")
 def games_titles():
     gms = []
     for game in games.values():
-        if game.gid != id_now:
+        if game.status == "finished":
             gms.append(game.title)
     return {"status": "ok", "games": gms}
 
 
 @app.post("/new_game")
-async def new_game(new_game: GameHttp):
+async def new_game(new_game: GameHttp, key: str = ''):
     global games, chats
+    if key != os.environ.get('GT_KEY'):
+        return {"status": "error", "message": "invalid key"}
     if id_now != -1 and games[id_now].status != "finished":
         return {"status": "error", "message": "game already exists"}
     game = Game(new_game.title, new_game.question, new_game.selections, new_game.start_timestamp_msec,
@@ -150,13 +186,32 @@ async def new_game(new_game: GameHttp):
     return game
 
 
-@app.get("/game/{gid}")
+def query_selection_and_result(gid: int, uid: str):
+    global games
+    game = games[gid]
+    for i in range(len(game.selections)):
+        if uid in game.allocations[i]:
+            return {"selection": i, "result": game.result[i]}
+    return {"selection": -1, "result": 0}
+
+
+@app.get("/game/{gid}/user/{uid}")
+def game_user(gid: int, uid: str):
+    global games
+    if gid not in games:
+        return {"status": "error", "message": "game not found"}
+    game = games[gid]
+    sr = query_selection_and_result(gid, uid)
+    return {"game": game, "status": "ok", "user_selection": sr["selection"], "result": sr["result"]}
+
+
+@app.get("/game/{gid}", response_model_exclude={"status"})
 def get_game(gid: int):
     global games
     if gid not in games:
         return {"status": "error", "message": "game not found"}
     game = games[gid]
-    return {"status": "ok", "game": game}
+    return {"status": "ok", "game": (game)}
 
 
 @app.post("/submits")
@@ -180,9 +235,21 @@ async def submit(submit: SubmitItem):
     return {"status": "ok"}
 
 
+@app.get("/score/{username}")
+def score(username: str):
+    if username in accounts:
+        return {"status": "ok", "score": accounts[username]}
+    else:
+        return {"status": "error", "message": "user not found"}
+
+
 @app.get("/submits")
-async def get_submits() -> Game:
+def get_submits(username: str = "") -> Game:
     global games
-    game = games[id_now]
+    if id_now == -1:
+        return {"status": "error", "message": "no game in progress currently"}
     update_game_status(id_now)
-    return game
+    game = games[id_now]
+    gu = query_selection_and_result(id_now, username)
+    return {"status": "ok", "game": game, "user_score": -1 if username not in accounts else accounts[username],
+            "user_selection": gu["selection"], "result": gu["result"]}
